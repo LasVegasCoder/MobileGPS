@@ -1,2 +1,1 @@
-# MobileGPS
-A program to read and distribute GPS data for mobile hotspots.
+This is a small program to read NMEA data from a serially connected GPS unit and then to make that data available for other programs in a simple format. Filtering is available to limit the amount of data transmitted. This filtering is based on distance moved and time elapsed.
