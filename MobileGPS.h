@@ -31,6 +31,8 @@
 #include <winsock.h>
 #endif
 
+#include "UDPSocket.h"
+
 #include <string>
 
 class CMobileGPS
@@ -43,17 +45,22 @@ public:
 
 private:
 	std::string m_file;
+	CUDPSocket* m_network;
 
 	bool        m_debug;
+	bool        m_networkDebug;
 
 	unsigned char* m_data;
 	unsigned int   m_offset;
 	bool           m_collect;
 
-	char* m_latitude;
-	char* m_latitudeNS;
-	char* m_longitude;
-	char* m_longitudeEW;
+	bool  m_gga;
+	bool  m_rmc;
+	bool  m_height;
+	bool  m_moving;
+
+	float m_latitude;
+	float m_longitude;
 	float m_altitude;
 	float m_speed;
 	float m_bearing;
@@ -63,6 +70,7 @@ private:
 	unsigned char calcXOR(const unsigned char* buffer, unsigned int length) const;
 	void processGGA();
 	void processRMC();
+	void writeReply(const in_addr& address, unsigned int port);
 	char* mystrsep(char** sp, const char* sep) const;
 };
 

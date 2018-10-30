@@ -18,8 +18,6 @@
 
 #include "MobileGPS.h"
 #include "SerialPort.h"
-#include "UDPSocket.h"
-#include "StopWatch.h"
 #include "Version.h"
 #include "Thread.h"
 #include "Timer.h"
@@ -52,6 +50,7 @@ const char* DEFAULT_INI_FILE = "/etc/MobileGPS.ini";
 #include <cstdarg>
 #include <ctime>
 #include <cstring>
+#include <cassert>
 
 
 int main(int argc, char** argv)
@@ -81,35 +80,27 @@ int main(int argc, char** argv)
 
 CMobileGPS::CMobileGPS(const std::string& file) :
 m_file(file),
+m_network(NULL),
 m_debug(false),
+m_networkDebug(false),
 m_data(NULL),
 m_offset(0U),
 m_collect(false),
-m_latitude(),
-m_latitudeNS(),
-m_longitude(),
-m_longitudeEW(),
+m_gga(false),
+m_rmc(false),
+m_height(false),
+m_moving(false),
+m_latitude(0.0F),
+m_longitude(0.0F),
 m_altitude(0.0F),
 m_speed(0.0F),
 m_bearing(0.0F)
 {
 	m_data = new unsigned char[1000U];
-
-	m_latitude   = new char[20U];
-	m_latitudeNS = new char[5U];
-
-	m_longitude   = new char[20U];
-	m_longitudeEW = new char[5U];
 }
 
 CMobileGPS::~CMobileGPS()
 {
-	delete[] m_latitude;
-	delete[] m_latitudeNS;
-
-	delete[] m_longitude;
-	delete[] m_longitudeEW;
-
 	delete[] m_data;
 }
 
@@ -206,21 +197,20 @@ void CMobileGPS::run()
 	}
 
 	unsigned int port = conf.getNetworkPort();
-	bool networkDebug = conf.getNetworkDebug();
+	m_networkDebug = conf.getNetworkDebug();
 
-	CUDPSocket network(port);
-	ret = network.open();
+	m_network = new CUDPSocket(port);
+	ret = m_network->open();
 	if (!ret) {
+		delete m_network;
 		gps.close();
 		::LogFinalise();
 		return;
 	}
 
-	CTimer minTimer(1000U, conf.getMinTime());
-	CTimer maxTimer(1000U, conf.getMaxTime());
-
-	CStopWatch stopWatch;
-	stopWatch.start();
+	unsigned int minDist = conf.getMinDistance();
+	unsigned int minTime = conf.getMinTime();
+	unsigned int maxTime = conf.getMaxTime();
 
 	LogMessage("Starting MobileGPS-%s", VERSION);
 
@@ -236,16 +226,21 @@ void CMobileGPS::run()
 
 		in_addr address;
 		unsigned int port;
-		len = network.read(buffer, 200U, address, port);
+		len = m_network->read(buffer, 200U, address, port);
 		if (len > 0) {
-			if (networkDebug) {
+			if (m_networkDebug) {
 				// Display address
-				CUtils::dump("Data", buffer, len);
+				CUtils::dump("Received Network Data", buffer, len);
 			}
+
+			writeReply(address, port);
 		}
+
+		CThread::sleep(50U);
 	}
 
-	network.close();
+	m_network->close();
+	delete m_network;
 
 	gps.close();
 
@@ -264,7 +259,7 @@ void CMobileGPS::interpret(const unsigned char* data, unsigned int length)
 
 			if (c == '\x0A') {
 				if (m_debug)
-					CUtils::dump("NMEA Data", (unsigned char*)m_data, m_offset);
+					CUtils::dump("Serial Data", (unsigned char*)m_data, m_offset);
 
 				bool ret = checkXOR(m_data + 1U, m_offset - 1U);
 				if (ret) {
@@ -336,15 +331,32 @@ void CMobileGPS::processGGA()
 	if (::strcmp(pGGA[6U], "0") == 0)
 		return;
 
-	::strcpy(m_latitude, pGGA[2U]);
-	::strcpy(m_latitudeNS, pGGA[3U]);
+	m_gga    = true;
+	m_height = false;
+
+	m_latitude = ::atof(pGGA[2U]);
+
+	// Convert the decimal minutes to decimal degrees
+	int degrees = int(m_latitude) / 100;
+	float decimal = (m_latitude - float(degrees * 100)) / 60.0F;
+	m_latitude = float(degrees) + decimal;
+
+	if (::strcmp(pGGA[3U], "S") == 0);
+		m_latitude *= -1.0F;
 	
-	::strcpy(m_longitude, pGGA[4U]);
-	::strcpy(m_longitudeEW, pGGA[5U]);
+	m_longitude = ::atof(pGGA[4U]);
+
+	// Convert the decimal minutes to decimal degrees
+	degrees = int(m_longitude) / 100;
+	decimal = (m_longitude - float(degrees * 100)) / 60.0F;
+	m_longitude = float(degrees) + decimal;
+
+	if (::strcmp(pGGA[5U], "W") == 0)
+		m_longitude *= -1.0F;
 
 	if (pGGA[9U] != NULL && ::strlen(pGGA[9U]) > 0U) {
-		// Convert altitude from metres to feet
-		m_altitude = ::atof(pGGA[9U]) * 3.28F;
+		m_height   = true;
+		m_altitude = ::atof(pGGA[9U]);
 	}
 }
 
@@ -372,16 +384,65 @@ void CMobileGPS::processRMC()
 	if (::strcmp(pRMC[2U], "A") != 0)
 		return;
 
-	::strcpy(m_latitude, pRMC[3U]);
-	::strcpy(m_latitudeNS, pRMC[4U]);
+	m_rmc    = true;
+	m_moving = false;
+
+	m_latitude = ::atof(pRMC[3U]);
+
+	// Convert the decimal minutes to decimal degrees
+	int degrees = int(m_latitude) / 100;
+	float decimal = (m_latitude - float(degrees * 100)) / 60.0F;
+	m_latitude = float(degrees) + decimal;
+
+	if (::strcmp(pRMC[4U], "S") == 0);
+		m_latitude *= -1.0F;
 	
-	::strcpy(m_longitude, pRMC[5U]);
-	::strcpy(m_longitudeEW, pRMC[6U]);
+	m_longitude = ::atof(pRMC[5U]);
+
+	// Convert the decimal minutes to decimal degrees
+	degrees = int(m_longitude) / 100;
+	decimal = (m_longitude - float(degrees * 100)) / 60.0F;
+	m_longitude = float(degrees) + decimal;
+
+	if (::strcmp(pRMC[6U], "W") == 0)
+		m_longitude *= -1.0F;
 
 	if (pRMC[7U] != NULL && pRMC[8U] != NULL && ::strlen(pRMC[7U]) > 0U && ::strlen(pRMC[8U]) > 0U) {
+		m_moving  = true;
+		m_speed   = ::atof(pRMC[7U]) * 1.852;	// Knots to km/h
 		m_bearing = ::atof(pRMC[8U]);
-		m_speed   = ::atof(pRMC[7U]);
 	}
+}
+
+void CMobileGPS::writeReply(const in_addr& address, unsigned int port)
+{
+	assert(m_network != NULL);
+
+	if (!m_gga && !m_rmc) {
+		m_network->write((unsigned char*)"N", 1U, address, port);
+		if (m_networkDebug)
+			CUtils::dump("Transmitted Network Data", (unsigned char*)"Y", 1U);
+		return;
+	}
+
+	char altitude[10U] = "";
+	if (m_height)
+		::sprintf(altitude, "%f", m_altitude);
+
+	char speed[10U] = "";
+	char bearing[10U] = "";
+	if (m_moving) {
+		::sprintf(speed, "%f", m_speed);
+		::sprintf(bearing, "%f", m_bearing);
+	}
+
+	char buffer[80U];
+	::sprintf(buffer, "Y%f,%f,%s,%s,%s", m_latitude, m_longitude, altitude, speed, bearing);
+
+	if (m_networkDebug)
+		CUtils::dump("Transmitted Network Data", (unsigned char*)buffer, ::strlen(buffer));
+
+	m_network->write((unsigned char*)buffer, ::strlen(buffer), address, port);
 }
 
 // Source found at <http://unixpapa.com/incnote/string.html>

@@ -4,7 +4,7 @@ CFLAGS  = -g -O3 -Wall -std=c++0x -pthread
 LIBS    = -lpthread
 LDFLAGS = -g
 
-OBJECTS = Conf.o Log.o MobileGPS.o SerialPort.o StopWatch.o Thread.o Timer.o UDPSocket.o Utils.o
+OBJECTS = Conf.o Log.o MobileGPS.o SerialPort.o Thread.o Timer.o UDPSocket.o Utils.o
 
 all:		MobileGPS
 
