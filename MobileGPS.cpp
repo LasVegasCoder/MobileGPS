@@ -196,10 +196,11 @@ void CMobileGPS::run()
 		return;
 	}
 
-	unsigned int port = m_conf.getNetworkPort();
-	m_networkDebug    = m_conf.getNetworkDebug();
+	std::string address = m_conf.getNetworkAddress();
+	unsigned int port   = m_conf.getNetworkPort();
+	m_networkDebug      = m_conf.getNetworkDebug();
 
-	m_network = new CUDPSocket(port);
+	m_network = new CUDPSocket(address, port);
 	ret = m_network->open();
 	if (!ret) {
 		delete m_network;
@@ -266,6 +267,8 @@ void CMobileGPS::interpret(const unsigned char* data, unsigned int length)
 						processGGA();
 					else if (::memcmp(m_data + 3U, "RMC", 3U) == 0)
 						processRMC();
+					else
+						LogMessage("Unknown NMEA sentence received: %.*s", m_offset, m_data);
 				}
 
 				m_offset = 0U;
@@ -418,6 +421,8 @@ void CMobileGPS::writeReply(const in_addr& address, unsigned int port)
 	assert(m_network != NULL);
 
 	if (!m_gga && !m_rmc) {
+		if (m_debug)
+			LogDebug("Cannot provide GPS data to peer, no NMEA data received yet: %s:%u", ::inet_ntoa(address), port);
 		m_network->write((unsigned char*)"N", 1U, address, port);
 		if (m_networkDebug)
 			CUtils::dump("Transmitted Network Data", (unsigned char*)"Y", 1U);
@@ -428,8 +433,14 @@ void CMobileGPS::writeReply(const in_addr& address, unsigned int port)
 	for (std::vector<CPeer*>::iterator it = m_peers.begin(); it != m_peers.end(); ++it) {
 		CPeer* temp = *it;
 		if (temp->m_address.s_addr == address.s_addr && temp->m_port == port) {
-			if (!temp->canReport(m_latitude, m_longitude))
+			if (!temp->canReport(m_latitude, m_longitude)) {
+				if (m_debug)
+					LogDebug("Cannot provide GPS data to peer, doesn't fulfill time/distance requirements: %s:%u", ::inet_ntoa(address), port);
+				m_network->write((unsigned char*)"N", 1U, address, port);
+				if (m_networkDebug)
+					CUtils::dump("Transmitted Network Data", (unsigned char*)"Y", 1U);
 				return;
+			}
 
 			peer = temp;
 			break;
@@ -437,9 +448,14 @@ void CMobileGPS::writeReply(const in_addr& address, unsigned int port)
 	}
 
 	if (peer == NULL) {
+		if (m_debug)
+			LogDebug("New peer appeared: %s:%u", ::inet_ntoa(address), port);
 		peer = new CPeer(m_conf.getMinTime(), m_conf.getMaxTime(), m_conf.getMinDistance(), address, port);
 		m_peers.push_back(peer);
 	}
+
+	if (m_debug)
+		LogDebug("Providing GPS data to peer: %s:%u", ::inet_ntoa(address), port);
 
 	peer->hasReported(m_latitude, m_longitude);	
 

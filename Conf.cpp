@@ -46,6 +46,7 @@ m_logFileRoot(),
 m_gpsPort(),
 m_gpsSpeed(0U),
 m_gpsDebug(false),
+m_networkAddress(),
 m_networkPort(0U),
 m_networkDebug(false)
 {
@@ -114,7 +115,9 @@ bool CConf::read()
 		  else if (::strcmp(key, "Debug") == 0)
 			  m_gpsDebug = ::atoi(value) == 1;
 	  } else if (section == SECTION_NETWORK) {
-		  if (::strcmp(key, "Port") == 0)
+		  if (::strcmp(key, "Address") == 0)
+			  m_networkAddress = value;
+		  else if (::strcmp(key, "Port") == 0)
 			  m_networkPort = (unsigned int)::atoi(value);
 		  else if (::strcmp(key, "Debug") == 0)
 			  m_networkDebug = ::atoi(value) == 1;
@@ -174,6 +177,11 @@ unsigned int CConf::getGPSSpeed() const
 bool CConf::getGPSDebug() const
 {
 	return m_gpsDebug;
+}
+
+std::string CConf::getNetworkAddress() const
+{
+	return m_networkAddress;
 }
 
 unsigned int CConf::getNetworkPort() const

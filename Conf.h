@@ -47,6 +47,7 @@ public:
   bool         getGPSDebug() const;
 
   // The Network section
+  std::string  getNetworkAddress() const;
   unsigned int getNetworkPort() const;
   bool         getNetworkDebug() const;
 
@@ -65,6 +66,7 @@ private:
   unsigned int m_gpsSpeed;
   bool         m_gpsDebug;
 
+  std::string  m_networkAddress;
   unsigned int m_networkPort;
   bool         m_networkDebug;
 };
