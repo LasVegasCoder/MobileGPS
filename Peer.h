@@ -16,8 +16,8 @@
 *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#if !defined(MobileGPS_H)
-#define	MobileGPS_H
+#if !defined(Peer_H)
+#define	Peer_H
 
 #if !defined(_WIN32) && !defined(_WIN64)
 #include <netdb.h>
@@ -31,54 +31,29 @@
 #include <winsock.h>
 #endif
 
-#include "UDPSocket.h"
 #include "Timer.h"
-#include "Conf.h"
-#include "Peer.h"
-
-#include <string>
-#include <vector>
 
 
-class CMobileGPS
+class CPeer
 {
 public:
-	CMobileGPS(const std::string& file);
-	~CMobileGPS();
+	CPeer(unsigned int minTime, unsigned int maxTime, unsigned int minDistance, const in_addr& address, unsigned int port);
 
-	void run();
+	bool canReport(float latitude, float longitude);
+
+	void hasReported(float latitude, float longitude);
+
+	void clock(unsigned int ms);
+
+	in_addr      m_address;
+	unsigned int m_port;
 
 private:
-	CConf       m_conf;
-	CUDPSocket* m_network;
-
-	bool        m_debug;
-	bool        m_networkDebug;
-
-	unsigned char* m_data;
-	unsigned int   m_offset;
-	bool           m_collect;
-
-	bool  m_gga;
-	bool  m_rmc;
-	bool  m_height;
-	bool  m_moving;
-
-	float m_latitude;
-	float m_longitude;
-	float m_altitude;
-	float m_speed;
-	float m_bearing;
-
-	std::vector<CPeer*> m_peers;
-
-	void interpret(const unsigned char* data, unsigned int length);
-	bool checkXOR(const unsigned char* data, unsigned int length) const;
-	unsigned char calcXOR(const unsigned char* buffer, unsigned int length) const;
-	void processGGA();
-	void processRMC();
-	void writeReply(const in_addr& address, unsigned int port);
-	char* mystrsep(char** sp, const char* sep) const;
+	CTimer m_minTimer;
+	CTimer m_maxTimer;
+	float  m_minDistance;
+	float  m_lastLatitude;
+	float  m_lastLongitude;
 };
 
 #endif

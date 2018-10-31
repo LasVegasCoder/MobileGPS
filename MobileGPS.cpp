@@ -20,9 +20,7 @@
 #include "SerialPort.h"
 #include "Version.h"
 #include "Thread.h"
-#include "Timer.h"
 #include "Utils.h"
-#include "Conf.h"
 #include "Log.h"
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -79,7 +77,7 @@ int main(int argc, char** argv)
 }
 
 CMobileGPS::CMobileGPS(const std::string& file) :
-m_file(file),
+m_conf(file),
 m_network(NULL),
 m_debug(false),
 m_networkDebug(false),
@@ -94,7 +92,8 @@ m_latitude(0.0F),
 m_longitude(0.0F),
 m_altitude(0.0F),
 m_speed(0.0F),
-m_bearing(0.0F)
+m_bearing(0.0F),
+m_peers()
 {
 	m_data = new unsigned char[1000U];
 }
@@ -102,20 +101,21 @@ m_bearing(0.0F)
 CMobileGPS::~CMobileGPS()
 {
 	delete[] m_data;
+
+	for (std::vector<CPeer*>::iterator it = m_peers.begin(); it != m_peers.end(); ++it)
+		delete *it;
 }
 
 void CMobileGPS::run()
 {
-	CConf conf(m_file);
-
-	bool ret = conf.read();
+	bool ret = m_conf.read();
 	if (!ret) {
 		::fprintf(stderr, "MobileGPS: cannot read the .ini file\n");
 		return;
 	}
 
 #if !defined(_WIN32) && !defined(_WIN64)
-	bool m_daemon = conf.getDaemon();
+	bool m_daemon = m_conf.getDaemon();
 	if (m_daemon) {
 		// Create new process
 		pid_t pid = ::fork();
@@ -169,7 +169,7 @@ void CMobileGPS::run()
 	}
 #endif
 
-	ret = ::LogInitialise(conf.getLogFilePath(), conf.getLogFileRoot(), 1U, 1U);
+	ret = ::LogInitialise(m_conf.getLogFilePath(), m_conf.getLogFileRoot(), 1U, 1U);
 	if (!ret) {
 		::fprintf(stderr, "MobileGPS: unable to open the log file\n");
 		return;
@@ -183,11 +183,11 @@ void CMobileGPS::run()
 	}
 #endif
 
-	m_debug = conf.getDebug();
+	m_debug = m_conf.getDebug();
 
-	std::string gpsPort = conf.getGPSPort();
-	unsigned int gpsSpeed = conf.getGPSSpeed();
-	bool gpsDebug = conf.getGPSDebug();
+	std::string gpsPort   = m_conf.getGPSPort();
+	unsigned int gpsSpeed = m_conf.getGPSSpeed();
+	bool gpsDebug         = m_conf.getGPSDebug();
 	
 	CSerialPort gps(gpsPort, SERIAL_SPEED(gpsSpeed));
 	ret = gps.open();
@@ -196,8 +196,8 @@ void CMobileGPS::run()
 		return;
 	}
 
-	unsigned int port = conf.getNetworkPort();
-	m_networkDebug = conf.getNetworkDebug();
+	unsigned int port = m_conf.getNetworkPort();
+	m_networkDebug    = m_conf.getNetworkDebug();
 
 	m_network = new CUDPSocket(port);
 	ret = m_network->open();
@@ -207,10 +207,6 @@ void CMobileGPS::run()
 		::LogFinalise();
 		return;
 	}
-
-	unsigned int minDist = conf.getMinDistance();
-	unsigned int minTime = conf.getMinTime();
-	unsigned int maxTime = conf.getMaxTime();
 
 	LogMessage("Starting MobileGPS-%s", VERSION);
 
@@ -235,6 +231,9 @@ void CMobileGPS::run()
 
 			writeReply(address, port);
 		}
+
+		for (std::vector<CPeer*>::iterator it = m_peers.begin(); it != m_peers.end(); ++it)
+			(*it)->clock(50U);
 
 		CThread::sleep(50U);
 	}
@@ -424,6 +423,25 @@ void CMobileGPS::writeReply(const in_addr& address, unsigned int port)
 			CUtils::dump("Transmitted Network Data", (unsigned char*)"Y", 1U);
 		return;
 	}
+
+	CPeer* peer = NULL;
+	for (std::vector<CPeer*>::iterator it = m_peers.begin(); it != m_peers.end(); ++it) {
+		CPeer* temp = *it;
+		if (temp->m_address.s_addr == address.s_addr && temp->m_port == port) {
+			if (!temp->canReport(m_latitude, m_longitude))
+				return;
+
+			peer = temp;
+			break;
+		}
+	}
+
+	if (peer == NULL) {
+		peer = new CPeer(m_conf.getMinTime(), m_conf.getMaxTime(), m_conf.getMinDistance(), address, port);
+		m_peers.push_back(peer);
+	}
+
+	peer->hasReported(m_latitude, m_longitude);	
 
 	char altitude[10U] = "";
 	if (m_height)
