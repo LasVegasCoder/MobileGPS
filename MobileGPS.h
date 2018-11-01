@@ -77,7 +77,7 @@ private:
 	unsigned char calcXOR(const unsigned char* buffer, unsigned int length) const;
 	void processGGA();
 	void processRMC();
-	void writeReply(const in_addr& address, unsigned int port);
+	void writeReply(const unsigned char* data, unsigned int length, const in_addr& address, unsigned int port);
 	char* mystrsep(char** sp, const char* sep) const;
 };
 

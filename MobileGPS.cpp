@@ -230,7 +230,7 @@ void CMobileGPS::run()
 				CUtils::dump("Received Network Data", buffer, len);
 			}
 
-			writeReply(address, port);
+			writeReply(buffer, len, address, port);
 		}
 
 		for (std::vector<CPeer*>::iterator it = m_peers.begin(); it != m_peers.end(); ++it)
@@ -416,16 +416,14 @@ void CMobileGPS::processRMC()
 	}
 }
 
-void CMobileGPS::writeReply(const in_addr& address, unsigned int port)
+void CMobileGPS::writeReply(const unsigned char* data, unsigned int length, const in_addr& address, unsigned int port)
 {
 	assert(m_network != NULL);
+	assert(data != NULL);
 
 	if (!m_gga && !m_rmc) {
 		if (m_debug)
-			LogDebug("Cannot provide GPS data to peer, no NMEA data received yet: %s:%u", ::inet_ntoa(address), port);
-		m_network->write((unsigned char*)"N", 1U, address, port);
-		if (m_networkDebug)
-			CUtils::dump("Transmitted Network Data", (unsigned char*)"Y", 1U);
+			LogDebug("Cannot provide GPS data to peer %.*s, no NMEA data received yet", length, data);
 		return;
 	}
 
@@ -435,10 +433,7 @@ void CMobileGPS::writeReply(const in_addr& address, unsigned int port)
 		if (temp->m_address.s_addr == address.s_addr && temp->m_port == port) {
 			if (!temp->canReport(m_latitude, m_longitude)) {
 				if (m_debug)
-					LogDebug("Cannot provide GPS data to peer, doesn't fulfill time/distance requirements: %s:%u", ::inet_ntoa(address), port);
-				m_network->write((unsigned char*)"N", 1U, address, port);
-				if (m_networkDebug)
-					CUtils::dump("Transmitted Network Data", (unsigned char*)"Y", 1U);
+					LogDebug("Cannot provide GPS data to peer %.*s, doesn't fulfill time/distance requirements", length, data);
 				return;
 			}
 
@@ -449,13 +444,13 @@ void CMobileGPS::writeReply(const in_addr& address, unsigned int port)
 
 	if (peer == NULL) {
 		if (m_debug)
-			LogDebug("New peer appeared: %s:%u", ::inet_ntoa(address), port);
+			LogDebug("New peer appeared %.*s: %s:%u", length, data, ::inet_ntoa(address), port);
 		peer = new CPeer(m_conf.getMinTime(), m_conf.getMaxTime(), m_conf.getMinDistance(), address, port);
 		m_peers.push_back(peer);
 	}
 
 	if (m_debug)
-		LogDebug("Providing GPS data to peer: %s:%u", ::inet_ntoa(address), port);
+		LogDebug("Providing GPS data to peer %.*s", length, data);
 
 	peer->hasReported(m_latitude, m_longitude);	
 
@@ -471,7 +466,7 @@ void CMobileGPS::writeReply(const in_addr& address, unsigned int port)
 	}
 
 	char buffer[80U];
-	::sprintf(buffer, "Y%f,%f,%s,%s,%s", m_latitude, m_longitude, altitude, speed, bearing);
+	::sprintf(buffer, "%f,%f,%s,%s,%s", m_latitude, m_longitude, altitude, speed, bearing);
 
 	if (m_networkDebug)
 		CUtils::dump("Transmitted Network Data", (unsigned char*)buffer, ::strlen(buffer));
