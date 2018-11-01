@@ -466,7 +466,7 @@ void CMobileGPS::writeReply(const unsigned char* data, unsigned int length, cons
 	}
 
 	char buffer[80U];
-	::sprintf(buffer, "%f,%f,%s,%s,%s", m_latitude, m_longitude, altitude, speed, bearing);
+	::sprintf(buffer, "%f,%f,%s,%s,%s\n", m_latitude, m_longitude, altitude, speed, bearing);
 
 	if (m_networkDebug)
 		CUtils::dump("Transmitted Network Data", (unsigned char*)buffer, ::strlen(buffer));
