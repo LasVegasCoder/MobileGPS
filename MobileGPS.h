@@ -53,6 +53,7 @@ private:
 	CUDPSocket* m_network;
 
 	bool        m_debug;
+	bool        m_gpsDebug;
 	bool        m_networkDebug;
 
 	unsigned char* m_data;

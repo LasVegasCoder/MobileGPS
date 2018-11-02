@@ -80,6 +80,7 @@ CMobileGPS::CMobileGPS(const std::string& file) :
 m_conf(file),
 m_network(NULL),
 m_debug(false),
+m_gpsDebug(false),
 m_networkDebug(false),
 m_data(NULL),
 m_offset(0U),
@@ -187,7 +188,7 @@ void CMobileGPS::run()
 
 	std::string gpsPort   = m_conf.getGPSPort();
 	unsigned int gpsSpeed = m_conf.getGPSSpeed();
-	bool gpsDebug         = m_conf.getGPSDebug();
+	m_gpsDebug            = m_conf.getGPSDebug();
 	
 	CSerialPort gps(gpsPort, SERIAL_SPEED(gpsSpeed));
 	ret = gps.open();
@@ -215,7 +216,7 @@ void CMobileGPS::run()
 		unsigned char buffer[200U];
 		int len = gps.read(buffer, 200U);
 		if (len > 0) {
-			if (gpsDebug)
+			if (m_gpsDebug)
 				CUtils::dump("GPS Data", buffer, len);
 				
 			interpret(buffer, len);
@@ -258,17 +259,23 @@ void CMobileGPS::interpret(const unsigned char* data, unsigned int length)
 			m_data[m_offset++] = data[i];
 
 			if (c == '\x0A') {
-				if (m_debug)
+				if (m_gpsDebug)
 					CUtils::dump("Serial Data", (unsigned char*)m_data, m_offset);
 
 				bool ret = checkXOR(m_data + 1U, m_offset - 1U);
 				if (ret) {
-					if (::memcmp(m_data + 3U, "GGA", 3U) == 0)
+					if (::memcmp(m_data + 3U, "GGA", 3U) == 0) {
+						if (m_debug)
+							LogDebug("GGA sentence received: %.*s", m_offset, m_data);
 						processGGA();
-					else if (::memcmp(m_data + 3U, "RMC", 3U) == 0)
+					} else if (::memcmp(m_data + 3U, "RMC", 3U) == 0) {
+						if (m_debug)
+							LogDebug("RMC sentence received: %.*s", m_offset, m_data);
 						processRMC();
-					else
-						LogMessage("Unknown NMEA sentence received: %.*s", m_offset, m_data);
+					} else {
+						if (m_debug)
+							LogDebug("Unknown NMEA sentence received: %.*s", m_offset, m_data);
+					}
 				}
 
 				m_offset = 0U;
