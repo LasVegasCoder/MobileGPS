@@ -343,17 +343,17 @@ void CMobileGPS::processGGA()
 	m_gga    = true;
 	m_height = false;
 
-	m_latitude = ::atof(pGGA[2U]);
+	m_latitude = float(::atof(pGGA[2U]));
 
 	// Convert the decimal minutes to decimal degrees
 	int degrees = int(m_latitude) / 100;
 	float decimal = (m_latitude - float(degrees * 100)) / 60.0F;
 	m_latitude = float(degrees) + decimal;
 
-	if (::strcmp(pGGA[3U], "S") == 0);
+	if (::strcmp(pGGA[3U], "S") == 0)
 		m_latitude *= -1.0F;
 	
-	m_longitude = ::atof(pGGA[4U]);
+	m_longitude = float(::atof(pGGA[4U]));
 
 	// Convert the decimal minutes to decimal degrees
 	degrees = int(m_longitude) / 100;
@@ -365,7 +365,7 @@ void CMobileGPS::processGGA()
 
 	if (pGGA[9U] != NULL && ::strlen(pGGA[9U]) > 0U) {
 		m_height   = true;
-		m_altitude = ::atof(pGGA[9U]);
+		m_altitude = float(::atof(pGGA[9U]));
 	}
 }
 
@@ -396,17 +396,17 @@ void CMobileGPS::processRMC()
 	m_rmc    = true;
 	m_moving = false;
 
-	m_latitude = ::atof(pRMC[3U]);
+	m_latitude = float(::atof(pRMC[3U]));
 
 	// Convert the decimal minutes to decimal degrees
 	int degrees = int(m_latitude) / 100;
 	float decimal = (m_latitude - float(degrees * 100)) / 60.0F;
 	m_latitude = float(degrees) + decimal;
 
-	if (::strcmp(pRMC[4U], "S") == 0);
+	if (::strcmp(pRMC[4U], "S") == 0)
 		m_latitude *= -1.0F;
 	
-	m_longitude = ::atof(pRMC[5U]);
+	m_longitude = float(::atof(pRMC[5U]));
 
 	// Convert the decimal minutes to decimal degrees
 	degrees = int(m_longitude) / 100;
@@ -418,8 +418,8 @@ void CMobileGPS::processRMC()
 
 	if (pRMC[7U] != NULL && pRMC[8U] != NULL && ::strlen(pRMC[7U]) > 0U && ::strlen(pRMC[8U]) > 0U) {
 		m_moving  = true;
-		m_speed   = ::atof(pRMC[7U]) * 1.852;	// Knots to km/h
-		m_bearing = ::atof(pRMC[8U]);
+		m_speed   = float(::atof(pRMC[7U])) * 1.852F;	// Knots to km/h
+		m_bearing = float(::atof(pRMC[8U]));
 	}
 }
 

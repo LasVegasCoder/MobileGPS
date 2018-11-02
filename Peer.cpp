@@ -21,6 +21,10 @@
 #include <cmath>
 #include <cassert>
 
+#if !defined(M_PI)
+#define	M_PI	3.141592654F
+#endif
+
 const float R = 6371.0F;
 
 float DEG2RAD(float x)

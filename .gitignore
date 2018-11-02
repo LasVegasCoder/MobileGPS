@@ -1,5 +1,7 @@
 *.o
 *.obj
+*.user
+*.log
 MobileGPS
 Debug
 Release
