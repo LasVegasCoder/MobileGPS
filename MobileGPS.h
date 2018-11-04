@@ -60,10 +60,13 @@ private:
 	unsigned int   m_offset;
 	bool           m_collect;
 
-	bool  m_gga;
-	bool  m_rmc;
-	bool  m_height;
-	bool  m_moving;
+	CTimer m_ggaTimer;
+	bool   m_gga;
+
+	CTimer m_rmcTimer;
+	bool   m_rmc;
+
+	bool   m_moving;
 
 	float m_latitude;
 	float m_longitude;

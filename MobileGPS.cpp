@@ -85,9 +85,10 @@ m_networkDebug(false),
 m_data(NULL),
 m_offset(0U),
 m_collect(false),
+m_ggaTimer(1000U, 20U),
 m_gga(false),
+m_rmcTimer(1000U, 20U),
 m_rmc(false),
-m_height(false),
 m_moving(false),
 m_latitude(0.0F),
 m_longitude(0.0F),
@@ -234,6 +235,20 @@ void CMobileGPS::run()
 			writeReply(buffer, len, address, port);
 		}
 
+		m_ggaTimer.clock(50U);
+		if (m_ggaTimer.isRunning() && m_ggaTimer.hasExpired()) {
+			LogWarning("Lost GGA GPS data");
+			m_gga = false;
+			m_ggaTimer.stop();
+		}
+
+		m_rmcTimer.clock(50U);
+		if (m_rmcTimer.isRunning() && m_rmcTimer.hasExpired()) {
+			LogWarning("Lost RMC GPS data");
+			m_rmc = false;
+			m_rmcTimer.stop();
+		}
+
 		for (std::vector<CPeer*>::iterator it = m_peers.begin(); it != m_peers.end(); ++it)
 			(*it)->clock(50U);
 
@@ -273,8 +288,8 @@ void CMobileGPS::interpret(const unsigned char* data, unsigned int length)
 							LogDebug("RMC sentence received: %.*s", m_offset, m_data);
 						processRMC();
 					} else {
-						if (m_debug)
-							LogDebug("Unknown NMEA sentence received: %.*s", m_offset, m_data);
+						// if (m_debug)
+						//	LogDebug("Unknown NMEA sentence received: %.*s", m_offset, m_data);
 					}
 				}
 
@@ -324,7 +339,7 @@ void CMobileGPS::processGGA()
 	unsigned int nGGA = 0U;
 
 	char* str = (char*)m_data;
-	for (;;) {
+	while (nGGA < 20U) {
 		char* p = mystrsep(&str, ",\r\n");
 
 		pGGA[nGGA++] = p;
@@ -339,9 +354,6 @@ void CMobileGPS::processGGA()
 	// Is it a valid GPS fix?
 	if (::strcmp(pGGA[6U], "0") == 0)
 		return;
-
-	m_gga    = true;
-	m_height = false;
 
 	m_latitude = float(::atof(pGGA[2U]));
 
@@ -363,10 +375,10 @@ void CMobileGPS::processGGA()
 	if (::strcmp(pGGA[5U], "W") == 0)
 		m_longitude *= -1.0F;
 
-	if (pGGA[9U] != NULL && ::strlen(pGGA[9U]) > 0U) {
-		m_height   = true;
-		m_altitude = float(::atof(pGGA[9U]));
-	}
+	m_altitude = float(::atof(pGGA[9U]));
+
+	m_gga = true;
+	m_ggaTimer.start();
 }
 
 void CMobileGPS::processRMC()
@@ -377,7 +389,7 @@ void CMobileGPS::processRMC()
 	unsigned int nRMC = 0U;
 
 	char* str = (char*)m_data;
-	for (;;) {
+	while (nRMC < 20U) {
 		char* p = mystrsep(&str, ",\r\n");
 
 		pRMC[nRMC++] = p;
@@ -393,7 +405,6 @@ void CMobileGPS::processRMC()
 	if (::strcmp(pRMC[2U], "A") != 0)
 		return;
 
-	m_rmc    = true;
 	m_moving = false;
 
 	m_latitude = float(::atof(pRMC[3U]));
@@ -421,6 +432,9 @@ void CMobileGPS::processRMC()
 		m_speed   = float(::atof(pRMC[7U])) * 1.852F;	// Knots to km/h
 		m_bearing = float(::atof(pRMC[8U]));
 	}
+
+	m_rmc = true;
+	m_rmcTimer.start();
 }
 
 void CMobileGPS::writeReply(const unsigned char* data, unsigned int length, const in_addr& address, unsigned int port)
@@ -461,10 +475,6 @@ void CMobileGPS::writeReply(const unsigned char* data, unsigned int length, cons
 
 	peer->hasReported(m_latitude, m_longitude);	
 
-	char altitude[10U] = "";
-	if (m_height)
-		::sprintf(altitude, "%f", m_altitude);
-
 	char speed[10U] = "";
 	char bearing[10U] = "";
 	if (m_moving) {
@@ -473,7 +483,7 @@ void CMobileGPS::writeReply(const unsigned char* data, unsigned int length, cons
 	}
 
 	char buffer[80U];
-	::sprintf(buffer, "%f,%f,%s,%s,%s\n", m_latitude, m_longitude, altitude, speed, bearing);
+	::sprintf(buffer, "%f,%f,%f,%s,%s\n", m_latitude, m_longitude, m_altitude, speed, bearing);
 
 	if (m_networkDebug)
 		CUtils::dump("Transmitted Network Data", (unsigned char*)buffer, ::strlen(buffer));
